@@ -66,8 +66,8 @@
 /* Private variables ---------------------------------------------------------*/
 const int SCI_MODE 		= 0x00;
 const int SCI_CLOCKF 	= 0x03;
+const int SCI_DECODE_TIME = 0x04;
 const int SCI_VOL 		= 0x0b;
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -162,70 +162,6 @@ int main(void)
 	
 	assert(cntMusicFiles);
 	
-	/*
-	FIL fp;
-	if (f_open(&fp, pszMusicFiles[0], FA_READ)!=FR_OK)
-		HAL_GPIO_WritePin(D5_GPIO_Port, D5_Pin, GPIO_PIN_RESET);
-	
-	setReg(SCI_MODE, 0x4804);
-	HAL_Delay(10);
-	setReg(SCI_CLOCKF, 0x8BE8);
-	HAL_Delay(10);
-	//setReg(SCI_VOL, 0x3030);
-	
-	printf("%x", getReg(SCI_MODE));
-	
-	while (!f_eof(&fp)) {
-		while (HAL_GPIO_ReadPin(DREQ_GPIO_Port, DREQ_Pin)==GPIO_PIN_RESET) ;
-		//HAL_Delay(500);
-		uint8_t data[32];
-		UINT br;
-		f_read(&fp,data,32,&br);
-		HAL_GPIO_WritePin(XDCS_GPIO_Port, XDCS_Pin, GPIO_PIN_RESET);
-		HAL_SPI_Transmit(&hspi2, data, br, 100);
-		HAL_GPIO_WritePin(XDCS_GPIO_Port, XDCS_Pin, GPIO_PIN_SET);
-	}
-	
-	uint8_t setexpara[4] = {0x02, 0x07, 0x1e, 0x06};
-	HAL_GPIO_WritePin(XCS_GPIO_Port, XCS_Pin, GPIO_PIN_RESET);
-	HAL_SPI_Transmit(&hspi2, setexpara, 4, 100);
-	HAL_GPIO_WritePin(XCS_GPIO_Port, XCS_Pin, GPIO_PIN_SET);
-	
-	uint8_t ans[2];
-	setexpara[0]=0x03;
-	setexpara[1]=0x06;
-	HAL_GPIO_WritePin(XCS_GPIO_Port, XCS_Pin, GPIO_PIN_RESET);
-	HAL_SPI_Transmit(&hspi2, setexpara, 2, 100);
-	HAL_SPI_Receive(&hspi2, ans, 2, 100);
-	HAL_GPIO_WritePin(XCS_GPIO_Port, XCS_Pin, GPIO_PIN_SET);
-	
-	HAL_GPIO_WritePin(XDCS_GPIO_Port, XDCS_Pin, GPIO_PIN_RESET);
-	for (int i=0;i<2052;++i) {
-		HAL_SPI_Transmit(&hspi2, &(ans[1]), 1, 100);
-	}
-	HAL_GPIO_WritePin(XDCS_GPIO_Port, XDCS_Pin, GPIO_PIN_SET);
-	
-	uint8_t cmd_can[4] = {0x02, 0x00, 0x48, 0x08};
-	HAL_GPIO_WritePin(XCS_GPIO_Port, XCS_Pin, GPIO_PIN_RESET);
-	HAL_SPI_Transmit(&hspi2, cmd_can, 4, 100);
-	HAL_GPIO_WritePin(XCS_GPIO_Port, XCS_Pin, GPIO_PIN_SET);
-	
-	HAL_GPIO_WritePin(XDCS_GPIO_Port, XDCS_Pin, GPIO_PIN_RESET);
-	for (int i=0;i<32;++i) {
-		HAL_SPI_Transmit(&hspi2, &(ans[1]), 1, 100);
-	}
-	HAL_GPIO_WritePin(XDCS_GPIO_Port, XDCS_Pin, GPIO_PIN_SET);
-	
-	while (!f_eof(&fp)) {
-		while (HAL_GPIO_ReadPin(DREQ_GPIO_Port, DREQ_Pin)==GPIO_PIN_RESET) ;
-		//HAL_Delay(500);
-		uint8_t data[32];
-		UINT br;
-		f_read(&fp,data,32,&br);
-		HAL_GPIO_WritePin(XDCS_GPIO_Port, XDCS_Pin, GPIO_PIN_RESET);
-		HAL_SPI_Transmit(&hspi2, data, br, 100);
-		HAL_GPIO_WritePin(XDCS_GPIO_Port, XDCS_Pin, GPIO_PIN_SET);
-	}*/
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -259,9 +195,29 @@ int main(void)
 			HAL_SPI_Transmit(&hspi2, data, br, 100);
 			HAL_GPIO_WritePin(XDCS_GPIO_Port, XDCS_Pin, GPIO_PIN_SET);
 		}
+		
+		// If file EOF, wait for finish of playing.
+		int lDecTime = getReg(SCI_DECODE_TIME);
+		while (run) {
+			// Wait for 1100ms and listen if KEY1 pressed
+			uint32_t tickstart = 0;
+			tickstart = HAL_GetTick();
+			while((HAL_GetTick() - tickstart) < 1100) {
+				if (HAL_GPIO_ReadPin(KEY1_GPIO_Port, KEY1_Pin)==GPIO_PIN_RESET)
+					run = 0;
+			}
+			
+			int decTime = getReg(SCI_DECODE_TIME);
+			if (decTime==lDecTime)
+				break;
+			lDecTime = decTime;
+		}
+		
+		// Blink LED.
 		HAL_GPIO_WritePin(D2_GPIO_Port, D2_Pin, GPIO_PIN_SET);
 		HAL_Delay(50);
 		HAL_GPIO_WritePin(D2_GPIO_Port, D2_Pin, GPIO_PIN_RESET);
+		
 		f_close(&fp);
 		++idInPlay;
   }
